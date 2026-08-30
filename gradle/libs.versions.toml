@@ -1,0 +1,8 @@
+[versions]
+junit = "5.11.2"
+mockito = "5.17.2"
+
+[libraries]
+junit-jupiter = { group = "org.junit.jupiter", name = "junit-jupiter", version.ref = "junit" }
+junit-platform-launcher = { group = "org.junit.platform", name = "junit-platform-launcher", version = "1.11.2" }
+mockito-core = { group = "org.mockito", name = "mockito-core", version.ref = "mockito" }
