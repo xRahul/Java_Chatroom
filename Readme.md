@@ -1,29 +1,85 @@
-#Java IRC-like ChatRoom
+# Java IRC-like ChatRoom
 
-##Features
-* Group Chat
-* Private Chat
-* Theme Changer Client GUI
+Modernized multi-module Gradle chatroom — group chat, private chat, themeable Swing client.
 
-##How to run
-1. Import **ChatRoomFinalServer** and **ChatRoomFinalClient** Projects in Eclipse.
-2. Firstly run the **StartingPointServer.java** in src folder of ChatRoomFinalServer Project.
-3. Make sure the Server GUI is running and it is displaying "Waiting for clients at ServerSocket[addr=0.0.0.0/0.0.0.0,port=0,localport=5555]".
-4. Now run the **StartingPointClient.java** in src folder of ChatRoomFinalClient Project.
-5. Enter the username in the dialog box and press Enter. Client is connected to the server.
-6. For multiple clients just do 4th step.
+> Ported from Eclipse `ChatRoomFinalServer` / `ChatRoomFinalClient` (Java 7 / `Hashtable` / `Thread.stop()`) to **Gradle 8.14.5 + Java 21** with `ConcurrentHashMap`, `ExecutorService`, `ObjectInputFilter` and unit tests.
 
-##Description
-**Server GUI** : Initially Server GUI is showing the message "Waiting for clients at ServerSocket[addr=0.0.0.0/0.0.0.0,port=0,localport=5555]" and as soon as first client is connected, his username along with his IP is shown as online (since we're using it on localhost hence in our case all clients IP will be (127.0.0.1) same). And whenever Client left the ChatRoom by closing his Client GUI, server GUI will show him offline with his username along with IP.
+## Features
 
-**Client GUI** : Firstly there is a dialog box prompting for the username. After you entered your username main Client GUI get connected with the Server showing Online Status. Client GUI consists of GUI Theme Changer(Upper Right Hand Corner), Clients Online, Chat History. Message written in the message input area is send to all clients and shown in the chat history along with the sender's client name. In order to do Private Chat, double click on the Client to whom you want to do private chat.   
+* Group broadcast to all connected clients
+* Private 1:1 chat (double-click user)
+* Live online user list (`!` / `!user1&user2` protocol)
+* Theme chooser on client (Nimbus/Metal)
+* Graceful disconnect handling
 
->**NOTE:** Since no database is used in Server Side. Hence whenever we restart the app, no previous chat is show on the Client Side.
+## Stack
 
-##Platform
+| | |
+|---|---|
+| Build | Gradle 8.14.5 (wrapper), `java-library` + `application` |
+| Runtime | Java 21 toolchain (Temurin) |
+| Test | JUnit 5.14.4, Mockito 5.23.0 |
+| CI | `ci.yml` — `./gradlew build` on push/PR |
+| Release | `release.yml` — auto GitHub Release on push to `master`/`main` |
 
-Coded in Linux, Mac OSX, Windows 7  
-Compiled in Mac OSX  
-Checked on Linux, Mac OSX, Windows 7  
+## Project layout
 
->**NOTE:** Currently working on localhost (127.0.0.1)
+```
+shared/  -> com.chatroom.shared.MessageProtocol  (wire format: @EE@| broadcast, @user: private, ! user list)
+server/  -> ChatServer (ConcurrentHashMap + bounded ExecutorService 100), ClientHandler (Runnable, filtered ObjectInputStream), ServerGUI/ServerDisplay, StartingPointServer :5555
+client/  -> ChatClient, MessageListener (Runnable), ClientGUI, StartingPointClient
+gradle/wrapper/  gradle-wrapper 317-tha
+.github/workflows/ci.yml, release.yml
+```
+
+## Prerequisites
+
+* JDK 21 (`java -version` → 21)
+* No local Gradle needed — wrapper handles it
+
+## Build & test
+
+```bash
+./gradlew build --no-daemon        # compile + test + jar
+./gradlew test --no-daemon         # tests only (21 tests)
+./gradlew :shared:test --tests "*MessageProtocolTest*"
+```
+
+## Run
+
+```bash
+# server (port 5555)
+./gradlew :server:run --no-daemon
+
+# client (connects to localhost:5555)
+./gradlew :client:run --no-daemon
+# → enter username → chat; double-click online user for private
+
+# or via distributions
+./gradlew :server:installDist :client:installDist --no-daemon
+./server/build/install/server/bin/server
+./client/build/install/client/bin/client
+```
+
+Multi-client: run `:client:run` in separate terminals.
+
+## Protocol (shared/MessageProtocol)
+
+* `PREFIX_BROADCAST = "@EE@|"`  broadcast
+* `PREFIX_PRIVATE  = "@"`        private `@user:message`
+* `PREFIX_USER_LIST = "!"`       `!alice&bob`
+
+Helpers: `isBroadcast`, `isPrivate`, `extractPrivateTarget`, `parseUserList`, `buildBroadcast/UserList`.
+
+Security: both sides use `ObjectInputFilter` (`String` only, max array 4096, max depth 16, reject others) + username validation `^[A-Za-z0-9_-]{1,32}$`.
+
+## CI / Release
+
+* **CI** (`ci.yml`): JDK 21 + `gradle/actions/setup-gradle@v3`, cache `gradle`, `./gradlew build --no-daemon` on push/PR to `master`/`main`.
+* **Release** (`release.yml`): on push to `master`/`main` or `workflow_dispatch` — builds jars, runs tests, `installDist`, packages `server/build/libs/*.jar` + `client/build/libs/*.jar` into `dist/`, publishes via `softprops/action-gh-release@v2` with tag `auto-${run_number}` and `generate_release_notes: true`. Needs default `GITHUB_TOKEN` (`contents: write`).
+
+## Notes
+
+* Server bind is `0.0.0.0:5555` (override via `new ChatServer(port, display)`).
+* No persistence — chat history is in-memory, cleared on restart.
+* Previously Eclipse-only; now headless-buildable and tested.

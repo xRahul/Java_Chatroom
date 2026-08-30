@@ -47,11 +47,17 @@ project(":server") {
     dependencies {
         implementation(project(":shared"))
     }
+    configure<JavaApplication> {
+        mainClass.set("com.chatroom.server.StartingPointServer")
+    }
 }
 
 project(":client") {
     apply(plugin = "application")
     dependencies {
         implementation(project(":shared"))
+    }
+    configure<JavaApplication> {
+        mainClass.set("com.chatroom.client.StartingPointClient")
     }
 }
